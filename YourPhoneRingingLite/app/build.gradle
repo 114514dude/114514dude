@@ -1,0 +1,23 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.yourphoneringing.lite'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'org.yourphoneringing.lite'
+        minSdk 23
+        targetSdk 28
+        versionCode 1
+        versionName '1.0-lite'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+    }
+}
