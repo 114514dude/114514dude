@@ -1,0 +1,39 @@
+name: Build Your Phone Ringing APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'YourPhoneRinging/**'
+      - '.github/workflows/your-phone-ringing.yml'
+  workflow_dispatch:
+jobs:
+  android:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check project files
+        run: test -f YourPhoneRinging/project.godot && test -f YourPhoneRinging/main.gd
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+          use-dotnet: false
+          include-templates: true
+      - uses: android-actions/setup-android@v3
+      - name: Android SDK packages
+        run: sdkmanager 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Generate debug signing key
+        run: keytool -genkeypair -keystore "$RUNNER_TEMP/debug.keystore" -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname 'CN=Android Debug,O=Android,C=US'
+      - name: Import Godot project
+        run: godot --headless --editor --path YourPhoneRinging --quit
+      - name: Export Android APK
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        run: |
+          mkdir -p YourPhoneRinging/build
+          godot --headless --path YourPhoneRinging --export-debug Android YourPhoneRinging/build/YourPhoneRinging-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YourPhoneRinging-APK
+          path: YourPhoneRinging/build/*.apk
