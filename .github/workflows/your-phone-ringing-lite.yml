@@ -1,0 +1,54 @@
+name: Build Your Phone Ringing Lite APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'YourPhoneRingingLite/**'
+      - 'YourPhoneRinging/art/**'
+      - '.github/workflows/your-phone-ringing-lite.yml'
+jobs:
+  tiny-apk:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Android API 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Prepare original vector illustrations
+        run: |
+          mkdir -p YourPhoneRingingLite/app/src/main/assets/art
+          cp YourPhoneRinging/art/*.svg YourPhoneRingingLite/app/src/main/assets/art/
+          test "$(find YourPhoneRingingLite/app/src/main/assets/art -name '*.svg' | wc -l)" -ge 8
+          node --check YourPhoneRingingLite/app/src/main/assets/game.js
+      - name: Build illustrated Android APK
+        run: gradle --no-daemon -p YourPhoneRingingLite :app:assembleDebug --stacktrace
+      - name: Verify installable APK and 3 MB cap
+        run: |
+          APK='YourPhoneRingingLite/app/build/outputs/apk/debug/app-debug.apk'
+          test -f "$APK"
+          BYTES=$(wc -c < "$APK")
+          echo "APK bytes: $BYTES"
+          test "$BYTES" -lt 3000000
+          unzip -t "$APK" | tail -n 2
+          unzip -l "$APK" | grep -E 'assets/(index.html|game.js|art/bathroom.svg|art/table.svg)'
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 3
+      - name: Publish small APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YourPhoneRinging-Lite-Under3MB-APK
+          path: YourPhoneRingingLite/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
