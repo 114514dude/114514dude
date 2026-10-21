@@ -6,6 +6,10 @@ const RED = Color("#dc6e6e")
 const GREEN = Color("#a7c99b")
 var rng = RandomNumberGenerator.new()
 var root: VBoxContainer
+var scene_image: TextureRect
+var scene_tint: ColorRect
+var hero_image: TextureRect
+var enemy_hurt = false
 var note: Label
 var life: Label
 var buttons: HFlowContainer
@@ -35,36 +39,71 @@ func _ready() -> void:
 	backdrop.color = BG
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(backdrop)
+	scene_image = TextureRect.new()
+	scene_image.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scene_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	scene_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	scene_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(scene_image)
+	scene_tint = ColorRect.new()
+	scene_tint.color = Color(0.025, 0.035, 0.045, 0.38)
+	scene_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scene_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(scene_tint)
 	root = VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.offset_left = 22
 	root.offset_right = -22
 	root.offset_top = 12
 	root.offset_bottom = -12
-	root.add_theme_constant_override("separation", 8)
+	root.add_theme_constant_override("separation", 6)
 	add_child(root)
 	show_bathroom()
+
+func show_art(which: String) -> void:
+	var path = "res://art/" + which + ".svg"
+	if ResourceLoader.exists(path):
+		scene_image.texture = load(path)
+
 
 func reset_view(title: String) -> void:
 	for child in root.get_children():
 		root.remove_child(child)
 		child.queue_free()
+	show_art("bathroom" if stage == "bathroom" else ("paper" if stage == "contract" or stage == "interlude" else ("car" if stage == "ending" else "table")))
 	var heading = Label.new()
 	heading.text = title
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 31)
 	heading.add_theme_color_override("font_color", GREEN)
+	heading.add_theme_color_override("font_shadow_color", Color.BLACK)
+	heading.add_theme_constant_override("shadow_offset_x", 2)
+	heading.add_theme_constant_override("shadow_offset_y", 3)
 	root.add_child(heading)
+	if stage == "game":
+		var portrait_box = CenterContainer.new()
+		portrait_box.custom_minimum_size = Vector2(0, 140)
+		root.add_child(portrait_box)
+		hero_image = TextureRect.new()
+		hero_image.custom_minimum_size = Vector2(174, 139)
+		hero_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		hero_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		hero_image.texture = load("res://art/face_hurt.svg" if enemy_hurt else "res://art/face.svg")
+		portrait_box.add_child(hero_image)
+
 	note = Label.new()
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.add_theme_font_size_override("font_size", 19)
 	note.add_theme_color_override("font_color", FG)
+	note.add_theme_color_override("font_shadow_color", Color.BLACK)
+	note.add_theme_constant_override("shadow_offset_x", 2)
 	root.add_child(note)
 	life = Label.new()
 	life.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	life.add_theme_font_size_override("font_size", 22)
 	life.add_theme_color_override("font_color", RED)
+	life.add_theme_color_override("font_shadow_color", Color.BLACK)
 	root.add_child(life)
 	buttons = HFlowContainer.new()
 	buttons.alignment = FlowContainer.ALIGNMENT_CENTER
@@ -75,6 +114,8 @@ func add_button(title: String, callback: Callable) -> void:
 	b.text = title
 	b.custom_minimum_size = Vector2(165, 50)
 	b.add_theme_font_size_override("font_size", 17)
+	b.add_theme_color_override("font_color", Color("#e7d8c1"))
+	b.add_theme_color_override("font_hover_color", Color("#f5efb0"))
 	b.pressed.connect(callback)
 	buttons.add_child(b)
 
@@ -114,6 +155,7 @@ func start_round() -> void:
 	enemy_skip = false
 	peeked = -1
 	item_stock = [1, 1, 1, 1, 1, 1]
+	enemy_hurt = false
 	refill_box("你听见盒盖被缓缓推开。")
 
 func refill_box(message: String) -> void:
@@ -158,6 +200,7 @@ func player_throw(test_only: bool) -> void:
 		return
 	var damage = 2 if double_damage else 1
 	double_damage = false
+	enemy_hurt = real == 1
 	if real == 1:
 		hp[1] -= damage
 	if check_end():
@@ -211,6 +254,7 @@ func show_interlude() -> void:
 
 func show_items() -> void:
 	reset_view("道 具 箱")
+	show_art("items")
 	note.text = "每种道具每局一次。"
 	life.text = "当前生命：" + str(hp[0]) + "  对手生命：" + str(hp[1])
 	var labels = ["绿茶：恢复1生命", "白手套：查看真伪", "充电宝：下次双倍伤害", "胶带：对手跳过回合", "盒饭：随机生命变化", "第三只手：丢弃当前手机"]
@@ -221,7 +265,7 @@ func show_items() -> void:
 	add_button("返回桌面", func(): render_game("你合上了道具箱。"))
 
 func use_item(index: int) -> void:
-	if item_stock[index] <= 0:
+	if stage != "game" or item_stock[index] <= 0:
 		return
 	item_stock[index] = 0
 	used_items += 1
