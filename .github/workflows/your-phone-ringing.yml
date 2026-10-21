@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: Use JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - name: Check project files
         run: test -f YourPhoneRinging/project.godot && test -f YourPhoneRinging/main.gd
       - uses: chickensoft-games/setup-godot@v2
@@ -23,6 +28,11 @@ jobs:
         run: sdkmanager 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
       - name: Generate debug signing key
         run: keytool -genkeypair -keystore "$RUNNER_TEMP/debug.keystore" -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname 'CN=Android Debug,O=Android,C=US'
+      - name: Configure Godot Android SDK
+        run: |
+          mkdir -p ~/.config/godot
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" > ~/.config/godot/editor_settings-4.tres
+          java -version
       - name: Import Godot project
         run: godot --headless --editor --path YourPhoneRinging --quit
       - name: Export Android APK
@@ -32,8 +42,9 @@ jobs:
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p YourPhoneRinging/build
-          godot --headless --path YourPhoneRinging --export-debug Android YourPhoneRinging/build/YourPhoneRinging-debug.apk
+          godot --headless --path YourPhoneRinging --export-debug Android "$GITHUB_WORKSPACE/YourPhoneRinging/build/YourPhoneRinging-debug.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: YourPhoneRinging-APK
           path: YourPhoneRinging/build/*.apk
+          if-no-files-found: error
