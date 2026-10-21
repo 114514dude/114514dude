@@ -12,7 +12,7 @@ func _draw() -> void:
 	if scene_kind == "bathroom":
 		for y in range(0, 540, 54):
 			for x in range(0, 960, 78):
-				draw_rect(Rect2(x + (39 if (y / 54) % 2 == 0 else 0), y, 76, 52), Color("#18242a"))
+				draw_rect(Rect2(x + (39 if int(y / 54) % 2 == 0 else 0), y, 76, 52), Color("#18242a"))
 				draw_line(Vector2(x, y), Vector2(x + 78, y), Color("#344348"), 2)
 		draw_rect(Rect2(345, 75, 270, 345), Color("#060a0e"))
 		draw_rect(Rect2(365, 95, 230, 305), Color("#22333a"))
