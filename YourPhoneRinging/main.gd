@@ -5,6 +5,7 @@ const FG = Color("#d4d6c7")
 const RED = Color("#dc6e6e")
 const GREEN = Color("#a7c99b")
 var rng = RandomNumberGenerator.new()
+var art_layer: Node2D
 var root: VBoxContainer
 var scene_image: TextureRect
 var scene_tint: ColorRect
@@ -50,6 +51,9 @@ func _ready() -> void:
 	scene_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	scene_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(scene_tint)
+	art_layer = Node2D.new()
+	art_layer.set_script(load("res://pixel_art.gd"))
+	add_child(art_layer)
 	root = VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.offset_left = 22
@@ -67,6 +71,8 @@ func show_art(which: String) -> void:
 
 
 func reset_view(title: String) -> void:
+	if is_instance_valid(art_layer):
+		art_layer.scene_kind = stage
 	for child in root.get_children():
 		root.remove_child(child)
 		child.queue_free()
