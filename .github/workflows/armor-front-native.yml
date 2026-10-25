@@ -1,0 +1,112 @@
+name: Build Armor Front Godot Native APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [armor-front-public-demo]
+    paths:
+      - 'armor-front-native/**'
+      - '.github/workflows/armor-front-native.yml'
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Android platform
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Install Godot 4.5.1 native editor
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq unzip libfontconfig1
+          curl -fL --retry 4 --max-time 400 -o /tmp/godot.zip 'https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip'
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.5.1-stable_linux.x86_64
+          /tmp/godot/Godot_v4.5.1-stable_linux.x86_64 --version
+      - name: Install official Godot Android export templates
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --max-time 1000 -o /tmp/templates.tpz 'https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_export_templates.tpz'
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.5.1.stable"
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          target=Path.home()/'.local/share/godot/export_templates/4.5.1.stable'
+          with ZipFile('/tmp/templates.tpz') as z:
+            for basename in ('android_debug.apk','android_release.apk','version.txt'):
+              archive_name='templates/'+basename
+              try: data=z.read(archive_name)
+              except KeyError:
+                if basename=='version.txt':data=b'4.5.1.stable'
+                else:raise
+              (target/basename).write_bytes(data)
+              print('TEMPLATE_READY',basename,len(data))
+          PY
+      - name: Restore licensed GLB models and native script
+        run: |
+          set -euo pipefail
+          mkdir -p armor-front-native/assets
+          python3 - <<'PY'
+          import base64,zlib,pathlib
+          p=pathlib.Path('armor-front-native')
+          s=(p/'main.gd.zlib.b64').read_text().strip()
+          (p/'main.gd').write_bytes(zlib.decompress(base64.b64decode(s)))
+          print('GDSCRIPT_READY', (p/'main.gd').stat().st_size)
+          PY
+          curl -fL --retry 4 --max-time 120 -o /tmp/previous.apk 'https://raw.githubusercontent.com/114514dude/114514dude/armor-front-public-demo/ArmorFront-Demo.apk'
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          a=Path('armor-front-native/assets')
+          with ZipFile('/tmp/previous.apk') as z:
+            for filename in ('t34_85.glb','panzer_iii.glb','abrams_freeciv.glb'):
+              b=z.read('assets/assets/models/'+filename)
+              assert b[:4]==b'glTF' and len(b)>10000
+              (a/filename).write_bytes(b)
+            (a/'terrain_cc0.glb').write_bytes(z.read('assets/assets/maps/terrain_cc0.glb'))
+          print('LICENSED_MODELS_READY',len(list(a.glob('*.glb'))))
+          PY
+      - name: Import native 3D models and validate GDScript
+        run: |
+          set -euo pipefail
+          /tmp/godot/Godot_v4.5.1-stable_linux.x86_64 --headless --path armor-front-native --editor --import --quit > /tmp/godot-import.log 2>&1 || { tail -120 /tmp/godot-import.log; exit 1; }
+          tail -35 /tmp/godot-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|ERROR:.*main.gd' /tmp/godot-import.log; then exit 1; fi
+      - name: Build offline Godot ARM64 APK
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android" armor-front-native/build
+          keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=OpenArmor,C=US'
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER='androiddebugkey'
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD='android'
+          /tmp/godot/Godot_v4.5.1-stable_linux.x86_64 --headless --path armor-front-native --export-debug Android build/ArmorFront-Native.apk > /tmp/godot-export.log 2>&1 || { tail -150 /tmp/godot-export.log; exit 1; }
+          tail -60 /tmp/godot-export.log
+          test -s armor-front-native/build/ArmorFront-Native.apk
+          unzip -l armor-front-native/build/ArmorFront-Native.apk | grep -E 'libgodot_android|libgodot|assets'
+          du -h armor-front-native/build/ArmorFront-Native.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ArmorFront-Godot-Native-Android-APK
+          path: armor-front-native/build/ArmorFront-Native.apk
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish separate native APK to public branch
+        run: |
+          cp armor-front-native/build/ArmorFront-Native.apk ArmorFront-Native.apk
+          FILESIZE=$(stat -c%s ArmorFront-Native.apk)
+          if [ "$FILESIZE" -gt 90000000 ]; then echo "APK larger than GitHub 90MB branch threshold; download Actions artifact"; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ArmorFront-Native.apk
+          git commit -m 'Publish first Godot native preview APK [skip ci]'
+          git push origin HEAD:armor-front-public-demo
