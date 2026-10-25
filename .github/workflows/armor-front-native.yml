@@ -83,8 +83,15 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error|ERROR:.*main.gd' /tmp/godot-import.log; then exit 1; fi
       - name: Configure Godot editor Android SDK paths
         run: |
-          /tmp/godot/Godot_v4.5.1-stable_linux.x86_64 --headless --path armor-front-native --editor --script res://setup_editor.gd
-          ls -l "$HOME/.config/godot/" || true
+          mkdir -p "$HOME/.config/godot"
+          python3 - <<'PY'
+          import os,pathlib
+          p=pathlib.Path.home()/'.config/godot/editor_settings-4.5.tres'
+          p.write_text('[gd_resource type="EditorSettings" format=3]\n[resource]\n'+
+            'export/android/android_sdk_path = "'+os.environ['ANDROID_HOME']+'"\n'+
+            'export/android/java_sdk_path = "'+os.environ['JAVA_HOME']+'"\n')
+          print('ANDROID_EDITOR_SETTINGS',p.read_text())
+          PY
       - name: Build offline Godot ARM64 APK
         run: |
           set -euo pipefail
