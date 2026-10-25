@@ -1,0 +1,4 @@
+/originals/
+/.gradle/
+/app/build/
+/app/src/main/assets/assets/models/*.glb
