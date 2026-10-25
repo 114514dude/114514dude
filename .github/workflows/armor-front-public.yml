@@ -21,6 +21,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Test per-vehicle armor, rounds and internal damage
+        run: node --test tests/ballistics.test.mjs
       - name: Blender conversion dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq blender python3-numpy
       - name: Fetch original distinct CC0 tank models
