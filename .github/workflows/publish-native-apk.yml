@@ -1,0 +1,35 @@
+name: Publish Native APK from verified build artifact
+on:
+  push:
+    branches: [armor-front-public-demo]
+    paths: ['.github/workflows/publish-native-apk.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch completed Godot native build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/native-build
+          gh run download 40170333146 --name ArmorFront-Godot-Native-Android-APK --dir /tmp/native-build
+          test -s /tmp/native-build/ArmorFront-Native.apk
+          unzip -l /tmp/native-build/ArmorFront-Native.apk | grep 'lib/arm64-v8a/libgodot_android.so'
+          cp /tmp/native-build/ArmorFront-Native.apk ArmorFront-Native.apk
+          sha256sum ArmorFront-Native.apk
+      - name: Push APK without overwriting other files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ArmorFront-Native.apk
+          git commit -m 'Publish Armor Front Godot native 3D APK [skip ci]'
+          git fetch origin armor-front-public-demo
+          git rebase origin/armor-front-public-demo
+          git push origin HEAD:armor-front-public-demo
