@@ -22,23 +22,38 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Test per-vehicle armor, rounds and internal damage
-        run: node --test tests/ballistics.test.mjs
+        run: node --test tests/ballistics.test.mjs tests/kinematics.test.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          a=Path('app/src/main/assets/index.html').read_text().split('<script type="module">')[1].split('</script>')[0]
+          Path('/tmp/armorfront.mjs').write_text(a)
+          assert 'if(external)' not in a
+          PY
+          node --check /tmp/armorfront.mjs
       - name: Blender conversion dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq blender python3-numpy
       - name: Fetch original distinct CC0 tank models
         run: |
           set -euo pipefail
-          mkdir -p originals app/src/main/assets/assets/models
+          mkdir -p originals app/src/main/assets/assets/models app/src/main/assets/assets/maps
           curl -fL --retry 3 --max-time 120 'https://opengameart.org/sites/default/files/Rudy.blend' -o originals/t34.blend
           curl -fL --retry 3 --max-time 120 'https://opengameart.org/sites/default/files/pzIIIs.blend' -o originals/panzer3.blend
           curl -fL --retry 3 --max-time 120 'https://opengameart.org/sites/default/files/abrams-tank.blend' -o originals/abrams.blend
+          curl -fL --retry 3 --max-time 120 'https://opengameart.org/sites/default/files/Terrain.blend' -o originals/terrain.blend
       - name: Convert and verify all three distinct vehicle GLBs
         run: |
           set -euo pipefail
           blender -b --python-exit-code 9 -P scripts/export_model.py -- originals/t34.blend app/src/main/assets/assets/models/t34_85.glb
           blender -b --python-exit-code 9 -P scripts/export_model.py -- originals/panzer3.blend app/src/main/assets/assets/models/panzer_iii.glb
           blender -b --python-exit-code 9 -P scripts/export_model.py -- originals/abrams.blend app/src/main/assets/assets/models/abrams_freeciv.glb
+          blender -b --python-exit-code 9 -P scripts/export_model.py -- originals/terrain.blend app/src/main/assets/assets/maps/terrain_cc0.glb
           python3 scripts/inject_manifest.py
+          python3 - <<'PY'
+          import pathlib,struct,json
+          b=pathlib.Path('app/src/main/assets/assets/maps/terrain_cc0.glb').read_bytes()
+          assert len(b)>10000 and b[:4]==b'glTF' and struct.unpack('<I',b[8:12])[0]==len(b)
+          n,t=struct.unpack('<II',b[12:20]);assert t==0x4E4F534A and json.loads(b[20:20+n])['meshes']
+          PY
           test $(find app/src/main/assets/assets/models -name '*.glb' | wc -l) -eq 3
       - uses: android-actions/setup-android@v3
         with:
@@ -54,9 +69,11 @@ jobs:
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/assets/models/t34_85.glb'
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/assets/models/panzer_iii.glb'
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/assets/models/abrams_freeciv.glb'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/assets/maps/terrain_cc0.glb'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/kinematics.js'
       - uses: actions/upload-artifact@v4
         with:
-          name: ArmorFront-3-CC0-Models-APK
+          name: ArmorFront-v0.7-CC0-Map
           path: armor-front/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Put APK on public branch
@@ -67,6 +84,6 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add ArmorFront-Demo.apk
           if ! git diff --cached --quiet; then
-            git commit -m 'Publish ArmorFront 3-vehicle APK [skip ci]'
+            git commit -m 'Publish ArmorFront v0.7 repair [skip ci]'
             git push origin HEAD:armor-front-public-demo
           fi
