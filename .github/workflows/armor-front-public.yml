@@ -22,7 +22,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Test per-vehicle armor, rounds and internal damage
-        run: node --test tests/ballistics.test.mjs tests/kinematics.test.mjs
+        run: |
+          node --test tests/ballistics.test.mjs tests/kinematics.test.mjs
           python3 - <<'PY'
           from pathlib import Path
           a=Path('app/src/main/assets/index.html').read_text().split('<script type="module">')[1].split('</script>')[0]
